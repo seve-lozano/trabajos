@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Calendario de Trabajo</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; padding: 1rem; }
+  .calendario {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 4px;
+    margin-bottom: 1rem;
+  }
+  .dia {
+    border: 1px solid #ccc;
+    padding: 0.5rem;
+    cursor: pointer;
+    min-height: 50px;
+    white-space: normal;
+  }
+  .trabajos, .fichaje { margin-top: 1rem; }
+  .semana { margin: 0.5rem 0; padding: 0.5rem; }
+  .cabecera {
+    font-weight: bold;
+    text-align: center;
+    padding: 0.5rem 0;
+    border-bottom: 2px solid #333;
+  }
+</style>
+</head>
+<body>
+
+<h1>Calendario de Trabajo</h1>
+
+<div id="cabeceraCalendario" class="calendario"></div>
+<div id="calendario" class="calendario"></div>
+
+<div class="trabajos">
+  <h2>Trabajos</h2>
+  <ul id="listaTrabajos"></ul>
+  <input type="text" id="nuevoTrabajo" placeholder="Nombre del trabajo" />
+  <input type="number" id="precioTrabajo" placeholder="Precio fijo" />
+  <button onclick="agregarTrabajo()">Agregar Trabajo</button>
+</div>
+
+<div class="fichaje" id="fichaje"></div>
+
+<div id="resumen"></div>
+
+<script>
+const trabajos = JSON.parse(localStorage.getItem('trabajos')) || [
+  { nombre: 'Trabajo 1', precio: 20 },
+  { nombre: 'Trabajo 2', precio: 25 }
+];
+const registros = JSON.parse(localStorage.getItem('registros')) || {};
+
+// Guarda trabajos y registros en localStorage
+function guardarDatos() {
+  localStorage.setItem('trabajos', JSON.stringify(trabajos));
+  localStorage.setItem('registros', JSON.stringify(registros));
+}
+
+// Muestra la lista de trabajos
+function renderTrabajos() {
+  const lista = document.getElementById('listaTrabajos');
+  lista.innerHTML = '';
+  trabajos.forEach((t, i) => {
+    const li = document.createElement('li');
+    li.textContent = `${t.nombre} - ${t.precio}€ por día `;
+    const btn = document.createElement('button');
+    btn.textContent = '❌';
+    btn.onclick = () => {
+      trabajos.splice(i, 1);
+      guardarDatos();
+      renderTrabajos();
+      actualizarCalendario();
+      actualizarResumen();
+    };
+    li.appendChild(btn);
+    lista.appendChild(li);
+  });
+}
+
+// Agrega un trabajo nuevo
+function agregarTrabajo() {
+  const nombre = document.getElementById('nuevoTrabajo').value.trim();
+  const precio = parseFloat(document.getElementById('precioTrabajo').value);
+  if (!nombre || isNaN(precio)) return;
+  trabajos.push({ nombre, precio });
+  document.getElementById('nuevoTrabajo').value = '';
+  document.getElementById('precioTrabajo').value = '';
+  guardarDatos();
+  renderTrabajos();
+  actualizarCalendario();
+}
+
+// Crea la fila superior con los días de la semana
+function crearCabeceraCalendario() {
+  const cabecera = document.getElementById('cabeceraCalendario');
+  cabecera.innerHTML = '';
+  const diasSemana = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
+  diasSemana.forEach(dia => {
+    const div = document.createElement('div');
+    div.className = 'cabecera';
+    div.textContent = dia;
+    cabecera.appendChild(div);
+  });
+}
+
+// Crea el calendario con días y trabajos asignados
+function crearCalendario() {
+  const cal = document.getElementById('calendario');
+  cal.innerHTML = '';
+  for (let i = 1; i <= 25; i++) { // 5 semanas * 5 días
+    const diaDiv = document.createElement('div');
+    diaDiv.className = 'dia';
+    const trabajoAsignado = registros[i]?.trabajo || '';
+    diaDiv.innerHTML = `<strong>Día ${i}</strong><br>${trabajoAsignado}`;
+    diaDiv.onclick = () => editarDia(i);
+    cal.appendChild(diaDiv);
+  }
+}
+
+// Actualiza el calendario (los trabajos asignados en cada día)
+function actualizarCalendario() {
+  const cal = document.getElementById('calendario');
+  const hijos = cal.children;
+  for (let i = 0; i < hijos.length; i++) {
+    const dia = i + 1;
+    const trabajoAsignado = registros[dia]?.trabajo || '';
+    hijos[i].innerHTML = `<strong>Día ${dia}</strong><br>${trabajoAsignado}`;
+  }
+}
+
+// Edita un día: asignar trabajo y fichar horas
+function editarDia(dia) {
+  const cont = document.getElementById('fichaje');
+  const reg = registros[dia] || {};
+  cont.innerHTML = `
+    <h2>Día ${dia}</h2>
+    <label>Trabajo: 
+      <select id="trabajoSelect">
+        ${trabajos
+          .map(
+            (t) =>
+              `<option value="${t.nombre}" ${
+                t.nombre === reg.trabajo ? 'selected' : ''
+              }>${t.nombre}</option>`
+          )
+          .join('')}
+      </select>
+    </label><br><br>
+    <label>Inicio: <input type="time" id="inicio" value="${reg.inicio || ''}" /></label><br><br>
+    <label>Fin: <input type="time" id="fin" value="${reg.fin || ''}" /></label><br><br>
+    <button onclick="guardarDia(${dia})">Guardar</button>
+  `;
+}
+
+// Guarda los datos de un día
+function guardarDia(dia) {
+  const trabajo = document.getElementById('trabajoSelect').value;
+  const inicio = document.getElementById('inicio').value;
+  const fin = document.getElementById('fin').value;
+  registros[dia] = { trabajo, inicio, fin };
+  guardarDatos();
+  actualizarCalendario();
+  actualizarResumen();
+  document.getElementById('fichaje').innerHTML = '';
+}
+
+// Actualiza el resumen semanal
+function actualizarResumen() {
+  const resumen = document.getElementById('resumen');
+  resumen.innerHTML = '<h2>Resumen Semanal</h2>';
+  for (let semana = 0; semana < 5; semana++) { // 5 semanas
+    let horas = 0,
+      totalFijo = 0,
+      diasTrabajados = 0;
+    for (let dia = semana * 5 + 1; dia <= (semana + 1) * 5; dia++) {
+      const reg = registros[dia];
+      if (reg && reg.inicio && reg.fin) {
+        diasTrabajados++;
+        const [h1, m1] = reg.inicio.split(':').map(Number);
+        const [h2, m2] = reg.fin.split(':').map(Number);
+        const duracion = h2 + m2 / 60 - (h1 + m1 / 60);
+        horas += duracion;
+        const precioFijo = trabajos.find((t) => t.nombre === reg.trabajo)?.precio || 0;
+        totalFijo += precioFijo;
+      }
+    }
+    const color = getColorForWeek(diasTrabajados);
+    const div = document.createElement('div');
+    div.className = 'semana';
+    div.style.backgroundColor = color;
+    const precioMedioHora = horas > 0 ? (totalFijo / horas).toFixed(2) : 0;
+    div.textContent = `Semana ${semana + 1}: ${horas.toFixed(2)} h, €${precioMedioHora}/h`;
+    resumen.appendChild(div);
+  }
+}
+
+function getColorForWeek(dias) {
+  if (dias === 5) return 'lightgreen';
+  if (dias >= 3) return 'yellow';
+  return 'lightcoral';
+}
+
+crearCabeceraCalendario();
+crearCalendario();
+renderTrabajos();
+actualizarResumen();
+</script>
+
+</body>
+</html>
